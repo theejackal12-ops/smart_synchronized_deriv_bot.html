@@ -1,0 +1,122 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Synchronized Deriv Bot</title>
+<style>
+body { background:#101827;color:white;font-family:Arial;
+padding:20px;max-width:600px;margin:auto }
+input,button { padding:12px;margin:5px 0;width:100%;
+box-sizing:border-box;border-radius:8px }
+button { background:#16a085;color:white;border:0;font-weight:bold }
+.card { background:#1e293b;padding:15px;margin:12px 0;
+border-radius:12px }
+small { color:#bdc8d8 }
+</style>
+</head>
+<body>
+<h2>🐺 Smart Synchronized Bot</h2>
+<p>Multi-market digit analyzer · Demo first</p>
+
+<div class="card">
+<label>Deriv API token (never share it)</label>
+<input id="token" type="password"
+placeholder="Paste demo token here">
+<button onclick="connectBot()">Connect to Demo</button>
+<button onclick="disconnectBot()">Disconnect</button>
+<p id="status">Not connected</p>
+</div>
+
+<div class="card">
+<b>Market ticks</b>
+<div id="ticks">Waiting for connection...</div>
+</div>
+
+<div class="card">
+<b>Trading mode</b>
+<p>Matches / Differs</p>
+<small>This starter only monitors live ticks.
+Automatic trading is not enabled.</small>
+</div>
+
+<script>
+let ws;
+let authorized = false;
+const symbols = ["R_10", "R_25", "R_50", "R_100"];
+const lastDigits = {};
+
+function showStatus(message) {
+  document.getElementById("status").textContent = message;
+}
+
+function connectBot() {
+  disconnectBot(false);
+  const token = document.getElementById("token").value.trim();
+
+  if (!token) {
+    showStatus("Enter a demo API token first.");
+    return;
+  }
+
+  ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
+
+  ws.onopen = () => {
+    showStatus("Connected. Authorizing...");
+    ws.send(JSON.stringify({ authorize: token }));
+  };
+
+  ws.onmessage = event => {
+    const data = JSON.parse(event.data);
+
+    if (data.error) {
+      showStatus("Error: " + data.error.message);
+      return;
+    }
+
+    if (data.msg_type === "authorize") {
+      authorized = true;
+      showStatus("Authorized. Subscribing to markets...");
+      symbols.forEach(symbol => {
+        ws.send(JSON.stringify({
+          ticks: symbol,
+          subscribe: 1
+        }));
+      });
+    }
+
+    if (data.msg_type === "tick") {
+      const symbol = data.tick.symbol;
+      const quote = String(data.tick.quote);
+      const digit = quote.replace(".", "").slice(-1);
+      lastDigits[symbol] = digit;
+
+      document.getElementById("ticks").innerHTML =
+        symbols.map(s =>
+          "<p>" + s + ": " +
+          (lastDigits[s] ?? "Waiting...") + "</p>"
+        ).join("");
+    }
+  };
+
+  ws.onerror = () => showStatus("Connection error. Check settings.");
+  ws.onclose = () => {
+    authorized = false;
+    showStatus("Disconnected");
+  };
+}
+
+function disconnectBot(clear = true) {
+  if (ws) {
+    ws.onclose = null;
+    ws.close();
+    ws = null;
+  }
+  authorized = false;
+  if (clear) showStatus("Disconnected");
+}
+</script>
+</body>
+  </html>
+  
